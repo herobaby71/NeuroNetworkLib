@@ -4,7 +4,7 @@ import pandas as pd
 from Optimization import Optimizer
 from sklearn.model_selection import train_test_split
 
-layer_names = ["affine", "ReLU", "LReLU", "softmax", "sigmoid", "conv", "max_pooling"]
+layer_names = ["affine", "ReLU", "LReLU", "softmax", "sigmoid", "conv", "conv_vec" ,"max_pooling"]
 class Architecture:
     def __init__(self, X = np.array([]), y = np.array([]), lamb = 0):
         self.X = X
@@ -17,12 +17,13 @@ class Architecture:
         #Optimizer
         self.optimizer = Optimizer()
         
-    def addLayer(self, name = "affine"):
+    def addLayer(self, name = "affine", conv_params = None, maxpool_params = None):
         if(not(name in layer_names)):
             raise TypeError("invalid layer name")
             return
-        self.layers[self.layers_count] = Layers(X = self.X, layer_name = name)
+        self.layers[self.layers_count] = Layers(X = self.X, layer_name = name, conv_params = conv_params, maxpool_params = maxpool_params)
         self.layers_count +=1
+
     def InitWeights(self):
         """
           Initialize required params for the network
@@ -50,40 +51,49 @@ class Architecture:
         caches = [None] * (self.layers_count)
         deltas = [None] * (self.layers_count)
         grads = {}
-        
+
+        weights_count = 0
         for i in range(self.layers_count-1):
-            if(self.layers[i].getName() == "conv"):
-                conv_params = {"pad": 1, "stride": 1}
-                outputs[i], caches[i] = self.layers[i].forwardProp(outputs[i-1], model["W" + str(i)], model["b"+ str(i)], conv_params)
-            elif(self.layers[i].getName() == "max_pooling"):
-                maxpool_params = {"H": 2, "W": 2, "stride": 2}
+            if(self.layers[i].getName() == "conv" or self.layers[i].getName() == "conv_vec"):
+                outputs[i], caches[i] = self.layers[i].forwardProp(outputs[i-1], model["W" + str(weights_count)], model["b"+ str(weights_count)])
+                weights_count+=1
+            elif(self.layers[i].getName() == "affine"):
+                outputs[i], caches[i] = self.layers[i].forwardProp(outputs[i-1], model["W" + str(weights_count)])
+                weights_count+=1
             else:
-                outputs[i], caches[i] = self.layers[i].forwardProp(outputs[i-1], model["W" + str(i)])
+                outputs[i], caches[i] = self.layers[i].forwardProp(outputs[i-1])
 
         #if we want to predict and not train a model, we want only the probability of the outputs
         if(not(optimizing)):
             return self.layers[self.layers_count-1].getCost(outputs[self.layers_count-2], y, optimizing)
 
-        out = outputs[self.layers_count-2]
-        conv2col = np.reshape(out, (out.shape[0], np.prod(out.shape[1:])))
         #compute Cost function
         J, deltas[self.layers_count-1] = self.layers[self.layers_count-1].getCost(conv2col, y)
 
         #regularization
         reg = 0
         for i in range(len(model)):
-            reg+=np.sum(np.power(model["W" + str(i)][:,1:],2))
+            reg+=np.sum(np.power(model["W" + str(i)],2))
         J+= (self.lamb/(2*m))*reg
 
         #backward propagation
+        weights_count = self.layers_count-2
         for i in reversed(range(self.layers_count-1)):
-            deltas[i], grads["W"+str(i)] = self.layers[i].backwardProp(deltas[i+1], caches[i])        
-            grads["W"+str(i)] *= 1/m
-            grads["W"+str(i)][:,1:] = grads["W"+str(i)][:,1:] + (lamb/m)*model["W"+str(i)][:,1:]
+            if(self.layers[i].getName() == "affine" ):
+                deltas[i], grads["W"+str(weights_count)] = self.layers[i].backwardProp(deltas[i+1], caches[i])
+                grads["W"+str(i)] *= 1/m
+                grads["W"+str(i)][:,1:] = grads["W"+str(i)][:,1:] + (lamb/m)*model["W"+str(i)][:,1:]
+                weights_count-=1
+            elif(self.layers[i].getName() == "conv"):
+                deltas[i], grads["W"+str(weights_count)], grads["b" + str(weights_count)] = self.layers[i].backwardProp(deltas[i+1], caches[i])
+                weights_count-=1
+            else:
+                deltas[i] = self.layers[i].backwardProp(deltas[i+1], caches[i])
+                
         return J, grads
     
     def train(self, X, y, X_val = None, y_val = None, model = None, update_method = 'sgd', epochs = 30):  
-        return self.optimizer.train(self.X, self.y, self.X_cv, self.y_cv, model, self.costFunction, update = update_method, numEpochs = epochs)
+        return self.optimizer.train(self.X_train, self.y_train, self.X_cv, self.y_cv, model, self.costFunction, update = update_method, numEpochs = epochs)
 
 
 ##def model():

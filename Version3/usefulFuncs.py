@@ -61,9 +61,11 @@ def unrollThetaParams(Thetas = None, input_layer_size=0,hidden_layer_size = 0, o
                         (output_layer_size,hidden_layer_size+1))
     return (Theta0, Theta1)
 
-def InitializeConvWeights(n_filters, channels, filter_size):
-    return    
-def InitializeWeights(input_layer_size, out_layer_size):        
+def InitializeConvWeights(n_filters= 32, filter_dims = (3,5,5)):
+    W = 1e-3* np.random.randn(n_filters, filter_dims[0], filter_dims[1], filter_dims[2])
+    b = 0*np.random.randn(n_filters)
+    return (W,b)
+def InitializeFullConnectWeights(input_layer_size, out_layer_size):        
     return np.sqrt(2/(input_layer_size+out_layer_size))*np.random.randn(out_layer_size,input_layer_size+1)
 
 def predict(costFunction,model, X):
